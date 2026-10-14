@@ -19,6 +19,8 @@ type Result = { transactionId: string; status: string; balance: MoneyProps | nul
 type TxRow = Record<string, any>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEXT = /^[\w:.-]{1,128}$/;
+const isText = (value: unknown): value is string => typeof value === 'string' && TEXT.test(value);
+const isUuid = (value: unknown): value is string => typeof value === 'string' && UUID.test(value);
 
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -34,11 +36,11 @@ export function sha256(value: unknown): string {
 }
 
 function validateInput(raw: WagerInput): { input: WagerInput; money: Money } {
-  if (!raw || !TEXT.test(raw.providerId ?? '') || !TEXT.test(raw.externalTransactionId ?? '') ||
-    !UUID.test(raw.playerId ?? '') || !UUID.test(raw.walletId ?? '') ||
-    !TEXT.test(raw.roundId ?? '') || !TEXT.test(raw.gameId ?? '') ||
+  if (!raw || !isText(raw.providerId) || !isText(raw.externalTransactionId) ||
+    !isUuid(raw.playerId) || !isUuid(raw.walletId) ||
+    !isText(raw.roundId) || !isText(raw.gameId) ||
     !['BET', 'WIN', 'LOSS', 'REFUND', 'ROLLBACK'].includes(raw.kind) ||
-    (raw.referenceExternalTransactionId !== undefined && !TEXT.test(raw.referenceExternalTransactionId)))
+    (raw.referenceExternalTransactionId !== undefined && !isText(raw.referenceExternalTransactionId)))
     throw new DomainError('INVALID_PAYLOAD');
   const money = Money.from(raw.money);
   if (!money.isPositive()) throw new DomainError('INVALID_AMOUNT');
@@ -115,7 +117,7 @@ export class WagerService {
       version: row.version, createdAt: row.createdAt, updatedAt: row.updatedAt });
   }
   async createWallet(playerId: string, initial: MoneyProps): Promise<unknown> {
-    if (!UUID.test(playerId ?? '')) throw new DomainError('INVALID_PAYLOAD');
+    if (!isUuid(playerId)) throw new DomainError('INVALID_PAYLOAD');
     const money = Money.from(initial);
     if (money.isNegative()) throw new DomainError('INVALID_AMOUNT');
     return this.withTx(async q => {
@@ -152,6 +154,19 @@ export class WagerService {
         e.balanceBefore.toString(), e.balanceAfter.toString()]);
   }
   async submit(raw: WagerInput, key: string, inbox?: Inbox): Promise<Result> {
+    const started = performance.now();
+    try {
+      const result = await this.submitTransaction(raw, key, inbox);
+      if (result.idempotentReplay) metrics.duplicates++;
+      else if (result.status in metrics.transactions)
+        metrics.transactions[result.status as keyof typeof metrics.transactions]++;
+      return result;
+    } finally {
+      metrics.processingCount++;
+      metrics.processingSumMs += performance.now() - started;
+    }
+  }
+  private async submitTransaction(raw: WagerInput, key: string, inbox?: Inbox): Promise<Result> {
     const { input, money } = validateInput(raw);
     if (!key || typeof key !== 'string' || key.length > 200) throw new DomainError('MISSING_IDEMPOTENCY_KEY');
     const hash = sha256(input);
@@ -298,7 +313,10 @@ export class WagerService {
       const wallet = await this.getWalletLocked(q, candidate.wallet_id);
       const [row] = await q.query('SELECT * FROM wager_transactions WHERE id=$1 FOR UPDATE', [id]);
       if (!row || row.status !== 'PENDING_REFERENCE' || new Date(row.next_attempt_at) > new Date()) return;
-      await this.process(q, transactionFrom(row), wallet, { correlationId: id }, row.reference_attempts);
+      const result = await this.process(q, transactionFrom(row), wallet, { correlationId: id }, row.reference_attempts);
+      metrics.retries++;
+      if (result.status !== 'PENDING_REFERENCE')
+        metrics.transactions[result.status as keyof typeof metrics.transactions]++;
     });
   }
   async dueReferences(): Promise<string[]> {
@@ -345,7 +363,10 @@ export class WagerService {
         date = decoded.date; id = decoded.id;
       } catch { throw new DomainError('INVALID_CURSOR'); }
     }
-    const rows = await db.query(`SELECT * FROM wallet_ledger WHERE wallet_id=$1
+    // Keep PostgreSQL's microseconds: the pg Date conversion truncates to milliseconds.
+    const rows = await db.query(`SELECT *,
+      to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at
+      FROM wallet_ledger WHERE wallet_id=$1
       AND ($2::timestamptz IS NULL OR (created_at,id)<($2::timestamptz,$3::uuid))
       ORDER BY created_at DESC,id DESC LIMIT $4`, [walletId, date, id, limit + 1]);
     const page = rows.slice(0, limit);
@@ -354,7 +375,7 @@ export class WagerService {
       direction: r.direction, money: { amount: r.amount, currency: r.currency },
       balanceBefore: { amount: r.balance_before, currency: r.currency },
       balanceAfter: { amount: r.balance_after, currency: r.currency }, createdAt: r.created_at })),
-      nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({ date: last.created_at,
+      nextCursor: rows.length > limit && last ? Buffer.from(JSON.stringify({ date: last.cursor_created_at,
         id: last.id })).toString('base64url') : null };
   }
   async reconcile(walletId: string): Promise<unknown> {

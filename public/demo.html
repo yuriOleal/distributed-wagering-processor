@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wager Lab · Demonstração local</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0c1217; --surface:#152029; --raised:#1b2a34; --line:#2a3b45;
+      --text:#edf5f2; --muted:#a5b7b7; --mint:#75e5ae; --amber:#ffce73; --red:#ff8e8e; }
+    * { box-sizing:border-box }
+    body { margin:0; background:radial-gradient(circle at 92% 3%,#1d3c38 0,transparent 34%),var(--bg);
+      color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; min-height:100vh }
+    a { color:var(--mint) } button,input,select { font:inherit }
+    button { border:1px solid transparent; border-radius:9px; padding:10px 15px; font-weight:650; cursor:pointer;
+      background:var(--mint); color:#10231d; transition:transform .15s,background .15s }
+    button:hover { background:#9bf0c3; transform:translateY(-1px) }
+    button:disabled { opacity:.55; cursor:wait; transform:none }
+    button.secondary { background:transparent; color:var(--text); border-color:var(--line) }
+    button.secondary:hover { background:var(--raised) }
+    button.tiny { padding:5px 9px; font-size:12px; font-weight:600 }
+    button.reference { display:block; margin-top:6px }
+    .shell { max-width:1320px; margin:auto; padding:30px 24px 64px }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px }
+    .brand { display:flex; align-items:center; gap:12px }
+    .mark { width:40px; height:40px; border-radius:11px; display:grid; place-items:center;
+      background:var(--mint); color:#10231d; font-size:22px; font-weight:900 }
+    .brand strong { display:block; font-size:20px; letter-spacing:-.04em; line-height:1.1 }
+    .brand span { color:var(--muted); font-size:12px }
+    .header-links { display:flex; align-items:center; gap:16px; flex-wrap:wrap }
+    .header-links a { text-decoration:none; font-weight:600; font-size:13px }
+    .health { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted) }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--amber) }
+    .dot.ready { background:var(--mint) }
+    .intro { margin-bottom:22px; display:flex; align-items:end; justify-content:space-between; gap:16px }
+    h1 { font-size:clamp(28px,4vw,42px); letter-spacing:-.05em; line-height:1.1; margin:0 0 8px }
+    .intro p { color:var(--muted); margin:0; max-width:620px }
+    .eyebrow { color:var(--mint); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.13em }
+    .grid { display:grid; grid-template-columns:minmax(310px,410px) minmax(0,1fr); gap:18px; align-items:start }
+    .stack { display:grid; gap:18px }
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:22px;
+      box-shadow:0 15px 40px #0002 }
+    .card h2 { font-size:18px; letter-spacing:-.02em; margin:2px 0 6px }
+    .card p { color:var(--muted); font-size:13px; margin:0 0 18px }
+    .section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:13px }
+    .section-head h2 { margin:0 }
+    label { display:block; color:var(--muted); font-size:12px; font-weight:650; margin-bottom:6px }
+    input,select { width:100%; border:1px solid var(--line); background:#101a21; color:var(--text);
+      border-radius:8px; padding:10px 11px; outline:none; min-width:0 }
+    input:focus,select:focus { border-color:var(--mint); box-shadow:0 0 0 3px #75e5ae24 }
+    input::placeholder { color:#819495 }
+    .field { margin-bottom:14px }
+    .two { display:grid; grid-template-columns:1fr 1fr; gap:12px }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:6px }
+    .mono { font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace; overflow-wrap:anywhere }
+    .id-strip { background:#101a21; border:1px solid var(--line); border-radius:9px; padding:11px 12px;
+      margin-top:14px; color:var(--muted) }
+    .id-strip strong { display:block; color:var(--text); font-size:12px; margin-top:3px }
+    .balance-card { background:linear-gradient(130deg,#1e4038,#162d30 72%); border-color:#356b59 }
+    .balance-card .caption { color:#b8d8cc; font-size:13px }
+    .balance { font-size:clamp(35px,5vw,56px); font-weight:750; letter-spacing:-.065em; line-height:1.1; margin:8px 0 }
+    .balance small { font-size:16px; color:#b8d8cc; letter-spacing:0; margin-left:5px }
+    .balance-meta { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; color:#b8d8cc; font-size:12px }
+    .table-wrap { overflow-x:auto }
+    table { border-collapse:collapse; width:100%; min-width:560px; font-size:13px }
+    th { color:var(--muted); text-transform:uppercase; font-size:11px; letter-spacing:.08em; text-align:left;
+      font-weight:700; padding:10px 8px; border-bottom:1px solid var(--line) }
+    td { padding:12px 8px; border-bottom:1px solid #263640; vertical-align:middle }
+    tr:last-child td { border-bottom:0 }
+    .credit { color:var(--mint) } .debit { color:var(--amber) }
+    .empty { color:var(--muted); font-size:13px; padding:16px 0 }
+    .feed { display:grid; gap:9px; max-height:330px; overflow:auto }
+    .feed-item { display:flex; justify-content:space-between; gap:10px; background:#101a21;
+      border:1px solid var(--line); border-radius:9px; padding:10px 12px }
+    .feed-item strong { font-size:13px }
+    .feed-item small { display:block; color:var(--muted); margin-top:3px }
+    .feed-item .right { text-align:right; flex:none }
+    .badge { display:inline-block; padding:3px 7px; border-radius:5px; font-size:11px; font-weight:700;
+      background:#2e5e4b; color:#b5f7d2 }
+    .badge.reject { background:#61383a; color:#ffd1d1 }
+    .badge.pending { background:#5f4b2d; color:#ffe3ae }
+    .feedback { margin-top:14px; padding:11px 12px; border-radius:8px; background:#214537;
+      color:#c5f7d8; font-size:13px; display:none; white-space:pre-wrap }
+    .feedback.error { background:#543336; color:#ffd3d3 }
+    .feedback.visible { display:block }
+    .note { color:var(--muted); font-size:12px; margin-top:13px }
+    @media(max-width:870px) { .grid { grid-template-columns:1fr } .intro { display:block }
+      .intro .eyebrow { margin-bottom:8px } }
+    @media(max-width:560px) { .shell { padding:18px 14px 40px } header { align-items:flex-start }
+      .two { grid-template-columns:1fr } .card { padding:18px } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><div class="mark" aria-hidden="true">W</div><div><strong>Wager Lab</strong><span>Demonstração local do processador</span></div></div>
+      <div class="header-links"><span class="health"><span id="health-dot" class="dot"></span><span id="health-text">Verificando serviços</span></span><a href="/api" target="_blank" rel="noopener">Documentação da API ↗</a></div>
+    </header>
+    <div class="intro"><div><div class="eyebrow">Ambiente de demonstração</div><h1>Operações claras. Saldo confiável.</h1><p>Crie uma wallet, processe transações e observe o ledger e a reconciliação diretamente no serviço local.</p></div></div>
+    <main class="grid">
+      <div class="stack">
+        <section class="card" aria-labelledby="wallet-title">
+          <div class="eyebrow">01 · Preparação</div><h2 id="wallet-title">Criar wallet</h2><p>O saldo inicial positivo gera um lançamento de abertura no ledger.</p>
+          <form id="wallet-form">
+            <div class="field"><label for="player-id">Player ID</label><input id="player-id" required autocomplete="off"></div>
+            <div class="two"><div class="field"><label for="opening-amount">Saldo inicial</label><input id="opening-amount" value="100.00" inputmode="decimal" required></div><div class="field"><label for="currency">Moeda</label><input id="currency" value="BRL" maxlength="3" required></div></div>
+            <button type="submit">Criar wallet</button>
+          </form>
+          <div class="id-strip">Wallet em uso<strong id="wallet-id" class="mono">Crie uma wallet para começar</strong></div>
+        </section>
+        <section class="card" aria-labelledby="transaction-title">
+          <div class="eyebrow">02 · Processamento</div><h2 id="transaction-title">Nova transação</h2><p>Uma mesma chave e um mesmo payload retornam o resultado original.</p>
+          <form id="transaction-form">
+            <div class="two"><div class="field"><label for="provider-id">Provedor</label><input id="provider-id" value="demo-provider" required></div><div class="field"><label for="kind">Operação</label><select id="kind"><option>BET</option><option>WIN</option><option>LOSS</option><option>REFUND</option><option>ROLLBACK</option></select></div></div>
+            <div class="two"><div class="field"><label for="amount">Valor</label><input id="amount" value="25.00" inputmode="decimal" required></div><div class="field"><label for="round-id">Rodada</label><input id="round-id" value="round-1" required></div></div>
+            <div class="two"><div class="field"><label for="game-id">Jogo</label><input id="game-id" value="demo-game" required></div><div class="field"><label for="external-id">ID externo</label><input id="external-id" required></div></div>
+            <div class="field"><label for="reference-id">ID externo de referência <span id="reference-hint">(opcional para WIN)</span></label><input id="reference-id" placeholder="Selecione uma operação abaixo, se necessário"></div>
+            <div class="field"><label for="idempotency-key">Idempotency-Key</label><input id="idempotency-key" required></div>
+            <div class="actions"><button type="submit">Processar</button><button type="button" id="replay" class="secondary" disabled>Reenviar última</button></div>
+          </form>
+          <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+        </section>
+      </div>
+      <div class="stack">
+        <section class="card balance-card" aria-labelledby="balance-title">
+          <div class="section-head"><h2 id="balance-title">Saldo da wallet</h2><button type="button" id="refresh" class="secondary tiny">Atualizar</button></div>
+          <div class="caption">Saldo materializado no PostgreSQL</div><div class="balance"><span id="balance">—</span><small id="balance-currency">BRL</small></div>
+          <div class="balance-meta"><span id="wallet-version">Versão —</span><span id="reconciliation">Reconciliação ainda não executada</span></div>
+          <div class="actions"><button type="button" id="reconcile" class="secondary tiny">Conferir com o ledger</button><button type="button" id="race" class="secondary tiny">Simular duas apostas de 80,00</button></div>
+        </section>
+        <section class="card" aria-labelledby="ledger-title"><div class="section-head"><div><div class="eyebrow">03 · Auditoria</div><h2 id="ledger-title">Ledger</h2></div><span id="ledger-count" class="note">0 lançamentos</span></div>
+          <div class="table-wrap"><table><thead><tr><th>Movimento</th><th>Valor</th><th>Antes</th><th>Depois</th><th>Transação</th></tr></thead><tbody id="ledger-body"><tr><td colspan="5" class="empty">Crie uma wallet para ver os lançamentos.</td></tr></tbody></table></div>
+        </section>
+        <section class="card" aria-labelledby="feed-title"><div class="section-head"><div><div class="eyebrow">04 · Resultado</div><h2 id="feed-title">Operações desta sessão</h2></div></div>
+          <div id="feed" class="feed"><div class="empty">As operações processadas aparecerão aqui.</div></div>
+          <div class="note">A interface é apenas uma demonstração. As garantias financeiras estão no domínio e no banco.</div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script>
+    const $ = id => document.getElementById(id);
+    const state = { wallet: null, last: null, operations: [] };
+    const newId = () => crypto.randomUUID();
+    function nextExternal() {
+      const id = `demo-${newId()}`;
+      $('external-id').value = id;
+      $('idempotency-key').value = `demo-provider:${id}`;
+    }
+    function feedback(message, error = false) {
+      $('feedback').textContent = message;
+      $('feedback').className = `feedback visible${error ? ' error' : ''}`;
+    }
+    async function api(path, options = {}) {
+      const response = await fetch(path, { ...options, headers: { 'Content-Type':'application/json', ...options.headers } });
+      let data;
+      try { data = await response.json(); } catch { throw new Error(`HTTP ${response.status}: resposta inválida`); }
+      if (!response.ok && !data.transactionId) throw new Error(`${data.code || 'HTTP_ERROR'} (HTTP ${response.status})`);
+      return { httpStatus: response.status, data };
+    }
+    async function refresh() {
+      if (!state.wallet) return;
+      const id = state.wallet.id;
+      const [wallet, ledger] = await Promise.all([
+        api(`/wallets/${encodeURIComponent(id)}`),
+        api(`/wallets/${encodeURIComponent(id)}/ledger?limit=50`),
+      ]);
+      state.wallet = { ...state.wallet, ...wallet.data };
+      $('balance').textContent = wallet.data.balance.amount;
+      $('balance-currency').textContent = wallet.data.balance.currency;
+      $('wallet-version').textContent = `Versão ${wallet.data.version}`;
+      $('ledger-count').textContent = `${ledger.data.entries.length} lançamento(s)`;
+      const body = $('ledger-body'); body.replaceChildren();
+      if (!ledger.data.entries.length) {
+        const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan = 5;
+        cell.className = 'empty'; cell.textContent = 'Nenhum lançamento nesta wallet.';
+      }
+      for (const entry of ledger.data.entries) {
+        const row = body.insertRow();
+        const values = [entry.direction, entry.money.amount, entry.balanceBefore.amount,
+          entry.balanceAfter.amount, entry.transactionId.slice(0, 8)];
+        values.forEach((value, index) => { const cell = row.insertCell(); cell.textContent = value;
+          if (index === 1) cell.className = entry.direction === 'CREDIT' ? 'credit' : 'debit';
+          if (index === 4) cell.className = 'mono'; });
+      }
+    }
+    function renderFeed() {
+      const feed = $('feed'); feed.replaceChildren();
+      for (const item of state.operations.slice(0, 8)) {
+        const card = document.createElement('div'); card.className = 'feed-item';
+        const left = document.createElement('div');
+        const title = document.createElement('strong'); title.textContent = `${item.kind} · ${item.amount} ${item.currency}`;
+        const detail = document.createElement('small'); detail.textContent = item.external;
+        left.append(title, detail);
+        const right = document.createElement('div'); right.className = 'right';
+        const badge = document.createElement('span'); badge.className = `badge ${item.status === 'REJECTED' ? 'reject' : item.status === 'PENDING_REFERENCE' ? 'pending' : ''}`;
+        badge.textContent = item.status; right.append(badge);
+        if (item.status === 'PROCESSED' && ['BET', 'WIN', 'REFUND'].includes(item.kind)) {
+          const select = document.createElement('button'); select.type = 'button'; select.className = 'secondary tiny reference';
+          select.textContent = 'Usar referência';
+          select.addEventListener('click', () => { $('reference-id').value = item.external;
+            $('kind').value = item.kind === 'BET' ? 'REFUND' : 'ROLLBACK'; $('kind').dispatchEvent(new Event('change'));
+            $('amount').value = item.amount; }); right.append(select);
+        }
+        card.append(left, right); feed.append(card);
+      }
+    }
+    async function submitPayload(payload, key, remember = true) {
+      const result = await api('/wagering/transactions', { method:'POST', headers:{'Idempotency-Key':key}, body:JSON.stringify(payload) });
+      if (remember) { state.last = { payload, key }; $('replay').disabled = false; }
+      state.operations.unshift({ kind:payload.kind, amount:payload.money.amount,
+        currency:payload.money.currency, external:payload.externalTransactionId, status:result.data.status });
+      renderFeed(); await refresh();
+      feedback(`${result.data.status} · HTTP ${result.httpStatus}${result.data.idempotentReplay ? ' · replay idempotente' : ''}${result.data.failureCode ? ' · '+result.data.failureCode : ''}`);
+      return result;
+    }
+    $('wallet-form').addEventListener('submit', async event => {
+      event.preventDefault(); const button = event.submitter; button.disabled = true;
+      try {
+        const { data } = await api('/wallets', { method:'POST', body:JSON.stringify({
+          playerId:$('player-id').value.trim(), initialBalance:{ amount:$('opening-amount').value.trim(),
+            currency:$('currency').value.trim().toUpperCase() }, }) });
+        state.wallet = data; state.operations = []; state.last = null; $('replay').disabled = true;
+        $('wallet-id').textContent = data.id; $('reconciliation').textContent = 'Reconciliação ainda não executada';
+        renderFeed(); await refresh(); feedback('Wallet criada. O lançamento de abertura já aparece no ledger.');
+      } catch (error) { feedback(error.message, true); } finally { button.disabled = false; }
+    });
+    $('transaction-form').addEventListener('submit', async event => {
+      event.preventDefault(); if (!state.wallet) { feedback('Crie uma wallet primeiro.', true); return; }
+      const button = event.submitter; button.disabled = true;
+      try {
+        const kind = $('kind').value; const reference = $('reference-id').value.trim();
+        const payload = { providerId:$('provider-id').value.trim(), externalTransactionId:$('external-id').value.trim(),
+          playerId:state.wallet.playerId, walletId:state.wallet.id, roundId:$('round-id').value.trim(),
+          gameId:$('game-id').value.trim(), kind, money:{ amount:$('amount').value.trim(), currency:state.wallet.balance.currency },
+          ...(reference ? { referenceExternalTransactionId:reference } : {}) };
+        await submitPayload(payload, $('idempotency-key').value.trim()); nextExternal(); $('reference-id').value = '';
+      } catch (error) { feedback(error.message, true); } finally { button.disabled = false; }
+    });
+    $('replay').addEventListener('click', async () => {
+      if (!state.last) return; $('replay').disabled = true;
+      try { await submitPayload(state.last.payload, state.last.key, false); }
+      catch (error) { feedback(error.message, true); } finally { $('replay').disabled = false; }
+    });
+    $('refresh').addEventListener('click', async () => { try { await refresh(); } catch (error) { feedback(error.message, true); } });
+    $('reconcile').addEventListener('click', async () => {
+      if (!state.wallet) { feedback('Crie uma wallet primeiro.', true); return; }
+      try { const { data } = await api(`/wallets/${encodeURIComponent(state.wallet.id)}/reconciliation`, { method:'POST' });
+        $('reconciliation').textContent = data.consistent ? `Ledger conferido · ${data.checkedEntries} lançamento(s)` : `Divergência: ${data.difference.amount}`;
+        feedback(data.consistent ? 'Reconciliação consistente.' : 'Divergência detectada: verifique o ledger.', !data.consistent);
+      } catch (error) { feedback(error.message, true); }
+    });
+    $('race').addEventListener('click', async event => {
+      const button = event.currentTarget; button.disabled = true;
+      try {
+        const playerId = newId(); const { data:wallet } = await api('/wallets', { method:'POST',
+          body:JSON.stringify({ playerId, initialBalance:{ amount:'100.00', currency:'BRL' } }) });
+        state.wallet = wallet; state.operations = []; state.last = null; $('replay').disabled = true;
+        $('player-id').value = playerId; $('wallet-id').textContent = wallet.id;
+        const make = () => { const externalTransactionId = `race-${newId()}`; return {
+          payload:{ providerId:'demo-provider', externalTransactionId, playerId, walletId:wallet.id,
+            roundId:'race-round', gameId:'demo-game', kind:'BET', money:{ amount:'80.00', currency:'BRL' } },
+          key:`demo-provider:${externalTransactionId}` }; };
+        const bets = [make(), make()];
+        const results = await Promise.all(bets.map(b => api('/wagering/transactions', { method:'POST',
+          headers:{'Idempotency-Key':b.key}, body:JSON.stringify(b.payload) })));
+        state.operations = results.map((result, i) => ({ kind:'BET', amount:'80.00', currency:'BRL',
+          external:bets[i].payload.externalTransactionId, status:result.data.status }));
+        renderFeed(); await refresh();
+        const statuses = results.map(result => result.data.status).sort().join(' / ');
+        feedback(`Duas apostas concorrentes: ${statuses}. Saldo final: ${state.wallet.balance.amount} BRL.`);
+      } catch (error) { feedback(error.message, true); } finally { button.disabled = false; }
+    });
+    $('kind').addEventListener('change', () => {
+      const kind = $('kind').value; const required = kind === 'REFUND' || kind === 'ROLLBACK';
+      $('reference-id').required = required;
+      $('reference-id').disabled = kind === 'BET' || kind === 'LOSS';
+      $('reference-hint').textContent = required ? '(obrigatório)' : kind === 'WIN' ? '(opcional para WIN)' : '(não usado)';
+      if ($('reference-id').disabled) $('reference-id').value = '';
+    });
+    $('player-id').value = newId(); nextExternal(); $('kind').dispatchEvent(new Event('change'));
+    fetch('/health/ready').then(response => response.json().then(data => ({ ok:response.ok, data })))
+      .then(({ ok }) => { $('health-dot').classList.toggle('ready', ok);
+        $('health-text').textContent = ok ? 'PostgreSQL e SQS prontos' : 'Dependências indisponíveis'; })
+      .catch(() => { $('health-text').textContent = 'Serviço indisponível'; });
+  </script>
+</body>
+</html>

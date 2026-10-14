@@ -2,8 +2,10 @@ import Decimal from 'decimal.js';
 import { randomUUID } from 'node:crypto';
 
 export type MoneyProps = { amount: string; currency: string };
-const AMOUNT = /^(0|[1-9]\d*)(?:\.\d{1,2})?$/;
+// PostgreSQL numeric(20,2) has at most 18 digits before the decimal point.
+const AMOUNT = /^(0|[1-9]\d{0,17})(?:\.\d{1,2})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
+const MAX_MONEY = new Decimal('999999999999999999.99');
 
 export class DomainError extends Error {
   constructor(public readonly code: string, message = code) { super(message); }
@@ -11,20 +13,25 @@ export class DomainError extends Error {
 
 export class Money {
   private constructor(private readonly value: Decimal, public readonly currency: string) {}
+  private static checked(value: Decimal, currency: string): Money {
+    if (value.abs().greaterThan(MAX_MONEY)) throw new DomainError('AMOUNT_OUT_OF_RANGE');
+    return new Money(value, currency);
+  }
   static from(p: MoneyProps): Money {
-    if (!p || typeof p.amount !== 'string' || !AMOUNT.test(p.amount) || !CURRENCY.test(p.currency))
+    if (!p || typeof p.amount !== 'string' || !AMOUNT.test(p.amount) ||
+      typeof p.currency !== 'string' || !CURRENCY.test(p.currency))
       throw new DomainError('INVALID_MONEY');
     const value = new Decimal(p.amount);
     if (!value.isFinite() || value.decimalPlaces() > 2) throw new DomainError('INVALID_MONEY');
     return new Money(value, p.currency);
   }
   static zero(currency: string): Money { return Money.from({ amount: '0.00', currency }); }
-  add(other: Money): Money { this.assertCurrency(other); return new Money(this.value.add(other.value), this.currency); }
-  subtract(other: Money): Money { this.assertCurrency(other); return new Money(this.value.sub(other.value), this.currency); }
+  add(other: Money): Money { this.assertCurrency(other); return Money.checked(this.value.add(other.value), this.currency); }
+  subtract(other: Money): Money { this.assertCurrency(other); return Money.checked(this.value.sub(other.value), this.currency); }
   negate(): Money { return new Money(this.value.neg(), this.currency); }
   isZero(): boolean { return this.value.isZero(); }
-  isPositive(): boolean { return this.value.isPositive(); }
-  isNegative(): boolean { return this.value.isNegative(); }
+  isPositive(): boolean { return this.value.greaterThan(0); }
+  isNegative(): boolean { return this.value.lessThan(0); }
   isLessThan(other: Money): boolean { this.assertCurrency(other); return this.value.lessThan(other.value); }
   equals(other: Money): boolean { return this.currency === other.currency && this.value.equals(other.value); }
   toJSON(): MoneyProps { return { amount: this.value.toFixed(2), currency: this.currency }; }

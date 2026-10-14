@@ -1,10 +1,11 @@
 import { Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ChangeMessageVisibilityCommand, DeleteMessageCommand, GetQueueAttributesCommand,
   ReceiveMessageCommand, SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { db } from './db';
 import { DomainError } from './domain';
 import { sha256, WagerInput, WagerService } from './service';
-import { log, metrics } from './metrics';
+import { errorCode, log, metrics } from './metrics';
 
 export const sqs = new SQSClient({
   region: process.env.AWS_REGION ?? 'us-east-1',
@@ -41,7 +42,7 @@ export class Workers implements OnApplicationBootstrap, OnApplicationShutdown {
             Number(message.Attributes?.ApproximateReceiveCount ?? 1));
         }
       } catch (error) {
-        log('sqs_receive_failed', { error: String(error) });
+        log('sqs_receive_failed', { error: errorCode(error) });
         await sleep(2000);
       }
     }
@@ -51,33 +52,35 @@ export class Workers implements OnApplicationBootstrap, OnApplicationShutdown {
     try {
       envelope = JSON.parse(body);
       if (!envelope || envelope.type !== 'WagerTransactionRequested' ||
-        typeof envelope.messageId !== 'string' || !envelope.data) throw new Error('invalid envelope');
+        typeof envelope.messageId !== 'string' || envelope.messageId.length === 0 ||
+        envelope.messageId.length > 128 || typeof envelope.occurredAt !== 'string' ||
+        !Number.isFinite(Date.parse(envelope.occurredAt)) ||
+        !envelope.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data))
+        throw new DomainError('INVALID_ENVELOPE');
       const data = envelope.data as WagerInput & { idempotencyKey: string };
-      const started = Date.now();
       const result = await this.wagers.submit(data, data.idempotencyKey, {
         consumerName: 'wager-processor', messageId: envelope.messageId, payloadHash: sha256(envelope),
       });
-      metrics.processingCount++;
-      metrics.processingSumMs += Date.now() - started;
-      if (result.idempotentReplay) metrics.duplicates++;
-      else metrics.transactions[result.status as keyof typeof metrics.transactions]++;
       // Ack happens only after the SQL transaction commits.
       await sqs.send(new DeleteMessageCommand({ QueueUrl: wagerQueue, ReceiptHandle: receipt }));
-      log('wager_consumed', { messageId: envelope.messageId, transactionId: result.transactionId,
+      log('wager_consumed', { correlationId: result.transactionId,
+        messageId: envelope.messageId, transactionId: result.transactionId,
         walletId: data.walletId, providerId: data.providerId, status: result.status });
     } catch (error) {
-      if (error instanceof DomainError || error instanceof SyntaxError || error instanceof TypeError) {
+      if (error instanceof DomainError || error instanceof SyntaxError) {
         try {
+          const walletId = envelope?.data?.walletId;
           await sqs.send(new SendMessageCommand({ QueueUrl: dlq, MessageBody: body,
-            MessageGroupId: envelope?.data?.walletId ?? 'invalid',
-            MessageDeduplicationId: envelope?.messageId ?? crypto.randomUUID() }));
+            MessageGroupId: typeof walletId === 'string' && /^[0-9a-f-]{36}$/i.test(walletId)
+              ? walletId : 'invalid',
+            MessageDeduplicationId: randomUUID() }));
           await sqs.send(new DeleteMessageCommand({ QueueUrl: wagerQueue, ReceiptHandle: receipt }));
           metrics.dlq++;
-          log('wager_dead_lettered', { messageId: envelope?.messageId, error: String(error) });
-        } catch (dlqError) { log('dlq_send_failed', { error: String(dlqError) }); }
+          log('wager_dead_lettered', { messageId: envelope?.messageId, error: errorCode(error) });
+        } catch (dlqError) { log('dlq_send_failed', { error: errorCode(dlqError) }); }
       } else {
         metrics.retries++;
-        log('wager_retry', { messageId: envelope?.messageId, receiveCount, error: String(error) });
+        log('wager_retry', { messageId: envelope?.messageId, receiveCount, error: errorCode(error) });
         await sqs.send(new ChangeMessageVisibilityCommand({ QueueUrl: wagerQueue,
           ReceiptHandle: receipt, VisibilityTimeout: Math.min(300, 2 ** Math.min(receiveCount, 8)) }));
       }
@@ -103,13 +106,13 @@ export class Workers implements OnApplicationBootstrap, OnApplicationShutdown {
                 next_attempt_at=now()+make_interval(secs=>LEAST(300,POWER(2,LEAST(attempts+1,8))::int))
                 WHERE id=$1`, [row.id]);
               metrics.retries++;
-              log('outbox_retry', { error: String(error) });
+              log('outbox_retry', { error: errorCode(error) });
             }
           }
           await q.commitTransaction();
         } catch (error) { await q.rollbackTransaction(); throw error; }
         finally { await q.release(); }
-      } catch (error) { log('outbox_worker_failed', { error: String(error) }); }
+      } catch (error) { log('outbox_worker_failed', { error: errorCode(error) }); }
       await sleep(500);
     }
   }
@@ -120,7 +123,7 @@ export class Workers implements OnApplicationBootstrap, OnApplicationShutdown {
           if (this.stopping) break;
           await this.wagers.retryReference(id);
         }
-      } catch (error) { log('reference_worker_failed', { error: String(error) }); }
+      } catch (error) { log('reference_worker_failed', { error: errorCode(error) }); }
       await sleep(1000);
     }
   }

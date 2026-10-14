@@ -17,6 +17,13 @@ curl http://localhost:3000/health/ready
 
 O serviço `migrate` aplica as migrations e cria `wager-transactions.fifo`, `wager-transactions-dlq.fifo` e `wager-events.fifo` antes de iniciar `app`. `GET /health/ready` responde 503 até PostgreSQL e SQS estarem disponíveis. As credenciais `test` e a senha do Compose são somente para ambiente local.
 
+## Interfaces locais de demonstração
+
+- [Painel visual](http://localhost:3000/demo): cria uma wallet, envia operações, mostra saldo e ledger, reconcilia e executa o cenário de duas apostas simultâneas de 80.00 sobre saldo 100.00.
+- [Documentação interativa](http://localhost:3000/api): contratos HTTP, exemplos e execução manual dos endpoints. O documento OpenAPI também está em `/api-json`.
+
+As duas interfaces usam os mesmos endpoints e o mesmo serviço de domínio. O painel é uma ferramenta local para demonstrar o comportamento do backend; não contém cálculos monetários nem uma segunda implementação das regras financeiras.
+
 Para rodar três instâncias contra o mesmo banco e as mesmas filas:
 
 ```sh
@@ -78,10 +85,13 @@ docker compose up -d postgres localstack
 bun run migration:run
 bun scripts/setup-sqs.ts
 bun run test:integration
-bun run migration:revert
+docker compose up --build -d
+docker compose run --rm --no-deps -e TEST_BASE_URL=http://app:3000 app bun run test:http
 ```
 
-Para testes dentro da rede do Compose, use `docker compose run --rm app bun run test:integration`. Os testes de integração exigem PostgreSQL e SQS reais; não usam mocks para essas dependências. Eles cobrem 50 reenvios paralelos, duas apostas disputando saldo, três processos, referência fora de ordem, inbox/redelivery, outbox com dois publishers e DLQ. A migration `down` remove o schema do desafio e deve ser executada apenas em um banco de testes descartável.
+Os testes de integração exigem PostgreSQL e LocalStack, mas `app` e `worker` devem estar parados durante sua execução: eles consomem as mesmas filas de teste. Se a aplicação já estiver ligada, execute `docker compose stop app worker` antes de `bun run test:integration`. Para executar os testes de integração na rede do Compose, use `docker compose run --rm --no-deps app bun run test:integration`. O teste HTTP exige `app` ligado.
+
+Os testes de integração usam PostgreSQL e SQS reais. Cobrem 50 reenvios paralelos, disputa de saldo, três processos, referência fora de ordem, precisão do cursor do ledger, inbox/redelivery, outbox com dois publishers, DLQ, falha transitória e um processo encerrado após o commit e antes do ack. Os testes HTTP conferem os status, replay, reconciliação, documentação e cabeçalhos do painel. `bun run migration:revert` remove o schema do desafio; execute esse comando somente em um banco de testes descartável.
 
 ## Decisões
 

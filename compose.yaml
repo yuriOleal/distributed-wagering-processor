@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: wager
       POSTGRES_PASSWORD: wager
       POSTGRES_DB: wager
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wager"]
       interval: 2s
@@ -15,11 +15,12 @@ services:
     environment:
       SERVICES: sqs
       AWS_DEFAULT_REGION: us-east-1
-    ports: ["4566:4566"]
+    ports: ["127.0.0.1:4566:4566"]
   migrate:
     build: .
     command: ["sh", "-c", "bun run migration:run && bun scripts/setup-sqs.ts"]
     environment: &env
+      HOST: 0.0.0.0
       DATABASE_URL: postgres://wager:wager@postgres:5432/wager
       SQS_ENDPOINT: http://localstack:4566
       AWS_REGION: us-east-1
@@ -34,7 +35,7 @@ services:
   app:
     build: .
     environment: *env
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
     depends_on:
       migrate: {condition: service_completed_successfully}
       localstack: {condition: service_started}
