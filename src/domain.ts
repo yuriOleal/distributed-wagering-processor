@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 export type MoneyProps = { amount: string; currency: string };
 // PostgreSQL numeric(20,2) has at most 18 digits before the decimal point.
-const AMOUNT = /^(0|[1-9]\d{0,17})(?:\.\d{1,2})?$/;
+const AMOUNT = /^(0|[1-9]\d{0,17})\.\d{2}$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const MAX_MONEY = new Decimal('999999999999999999.99');
 

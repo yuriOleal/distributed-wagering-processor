@@ -35,6 +35,7 @@ test('HTTP contract, concurrent balance, original replay, ledger and reconciliat
   const conflict = { ...bets[winnerIndex], money: { amount: '1.00', currency: 'BRL' } };
   expect((await call('/wagering/transactions', 'POST', conflict, bets[winnerIndex].externalTransactionId)).status).toBe(409);
   expect((await call('/wagering/transactions', 'POST', request('1.00'))).status).toBe(400);
+  expect((await call('/wagering/transactions', 'POST', request('1'), randomUUID())).status).toBe(400);
   expect((await call('/wagering/transactions', 'POST', { ...request('1.00'), providerId: 123 }, randomUUID())).status).toBe(400);
   const pending = { ...request('1.00'), kind: 'REFUND', referenceExternalTransactionId: randomUUID() };
   expect((await call('/wagering/transactions', 'POST', pending, pending.externalTransactionId)).status).toBe(202);

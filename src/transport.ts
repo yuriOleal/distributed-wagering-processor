@@ -37,9 +37,14 @@ export class Workers implements OnApplicationBootstrap, OnApplicationShutdown {
           MaxNumberOfMessages: 10, WaitTimeSeconds: 5, VisibilityTimeout: 30,
           MessageSystemAttributeNames: ['ApproximateReceiveCount'] }));
         for (const message of response.Messages ?? []) {
-          if (this.stopping) break;
-          await this.handleMessage(message.Body ?? '', message.ReceiptHandle!,
-            Number(message.Attributes?.ApproximateReceiveCount ?? 1));
+          if (this.stopping) {
+            // These messages were received but not started. Return them to the queue now.
+            await sqs.send(new ChangeMessageVisibilityCommand({ QueueUrl: wagerQueue,
+              ReceiptHandle: message.ReceiptHandle!, VisibilityTimeout: 0 }));
+          } else {
+            await this.handleMessage(message.Body ?? '', message.ReceiptHandle!,
+              Number(message.Attributes?.ApproximateReceiveCount ?? 1));
+          }
         }
       } catch (error) {
         log('sqs_receive_failed', { error: errorCode(error) });

@@ -19,11 +19,12 @@ describe('Money', () => {
     expect(() => Money.from({ amount: '1.00', currency: ['BRL'] as any })).toThrow(DomainError);
   });
   test('keeps two decimal places and exact arithmetic', () => {
-    expect(brl('0.1').add(brl('0.2')).toJSON()).toEqual({ amount: '0.30', currency: 'BRL' });
-    expect(brl('25').subtract(brl('0.01')).toString()).toBe('24.99');
+    expect(brl('0.10').add(brl('0.20')).toJSON()).toEqual({ amount: '0.30', currency: 'BRL' });
+    expect(brl('25.00').subtract(brl('0.01')).toString()).toBe('24.99');
   });
   test('rejects malformed, negative, excess scale and cross-currency operations', () => {
     for (const amount of ['', 'NaN', 'Infinity', '1e2', '-1.00', '1.001', ' 1.00',
+      '1', '1.0',
       '1000000000000000000.00'])
       expect(() => brl(amount)).toThrow(DomainError);
     expect(() => brl('1.00').add(Money.from({ amount: '1.00', currency: 'USD' })))
