@@ -67,7 +67,11 @@ export class InitialSchema1710000000000 implements MigrationInterface {
       CREATE FUNCTION check_wallet_ledger_consistency() RETURNS trigger LANGUAGE plpgsql AS $$
       DECLARE wid uuid; actual numeric(20,2); calculated numeric(20,2);
       BEGIN
-        wid := CASE WHEN TG_TABLE_NAME = 'wallets' THEN NEW.id ELSE NEW.wallet_id END;
+        IF TG_TABLE_NAME = 'wallets' THEN
+          wid := NEW.id;
+        ELSE
+          wid := NEW.wallet_id;
+        END IF;
         SELECT balance INTO actual FROM wallets WHERE id = wid;
         SELECT COALESCE(SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END), 0)
           INTO calculated FROM wallet_ledger WHERE wallet_id = wid;

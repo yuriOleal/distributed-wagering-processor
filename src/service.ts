@@ -46,7 +46,18 @@ function validateInput(raw: WagerInput): { input: WagerInput; money: Money } {
     throw new DomainError('INVALID_REFERENCE');
   if (['BET', 'LOSS'].includes(raw.kind) && raw.referenceExternalTransactionId)
     throw new DomainError('INVALID_REFERENCE');
-  const input = { ...raw, money: money.toJSON() };
+  const input: WagerInput = {
+    providerId: raw.providerId,
+    externalTransactionId: raw.externalTransactionId,
+    playerId: raw.playerId,
+    walletId: raw.walletId,
+    roundId: raw.roundId,
+    gameId: raw.gameId,
+    kind: raw.kind,
+    money: money.toJSON(),
+    ...(raw.referenceExternalTransactionId ?
+      { referenceExternalTransactionId: raw.referenceExternalTransactionId } : {}),
+  };
   return { input, money };
 }
 
