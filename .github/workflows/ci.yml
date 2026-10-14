@@ -1,0 +1,44 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wager
+          POSTGRES_PASSWORD: wager
+          POSTGRES_DB: wager
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U wager"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+      localstack:
+        image: localstack/localstack:3.8
+        env:
+          SERVICES: sqs
+          AWS_DEFAULT_REGION: us-east-1
+        ports: ["4566:4566"]
+    env:
+      DATABASE_URL: postgres://wager:wager@localhost:5432/wager
+      SQS_ENDPOINT: http://localhost:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      WAGER_QUEUE_URL: http://localhost:4566/000000000000/wager-transactions.fifo
+      WAGER_DLQ_URL: http://localhost:4566/000000000000/wager-transactions-dlq.fifo
+      EVENT_QUEUE_URL: http://localhost:4566/000000000000/wager-events.fifo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run migration:run
+      - run: bun scripts/setup-sqs.ts
+      - run: bun run test:integration
